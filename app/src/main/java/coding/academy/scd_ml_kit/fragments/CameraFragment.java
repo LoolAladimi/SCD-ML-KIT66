@@ -1,0 +1,393 @@
+package coding.academy.scd_ml_kit.fragments;
+
+import android.Manifest;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Point;
+import android.graphics.Rect;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.FileProvider;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Observer;
+
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.ml.vision.FirebaseVision;
+import com.google.firebase.ml.vision.common.FirebaseVisionImage;
+import com.google.firebase.ml.vision.text.FirebaseVisionText;
+import com.google.firebase.ml.vision.text.FirebaseVisionTextRecognizer;
+
+import java.io.File;
+
+import coding.academy.scd_ml_kit.Analyse;
+import coding.academy.scd_ml_kit.Callbacks;
+import coding.academy.scd_ml_kit.CodeViewActivity;
+import coding.academy.scd_ml_kit.PicUtil;
+import coding.academy.scd_ml_kit.R;
+import io.github.kbiakov.codeview.CodeView;
+import io.github.kbiakov.codeview.adapters.Options;
+import io.github.kbiakov.codeview.highlight.ColorTheme;
+
+import static android.app.Activity.RESULT_OK;
+
+
+public class CameraFragment extends Fragment {
+
+
+
+    private static final int requestPermissionID = 101;
+    static final int REQUEST_TAKE_PHOTO = 1;
+    static final int REQUEST_PHOTO_GALLERY = 2;
+
+    public static final int WRITE_STORAGE = 100;
+
+    private Analyse _analyse;
+
+    ImageView imageView;
+
+    TextView textSuggestion;
+    ImageView mCamera, mGallary ,mZoom;
+
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        // Inflate the layout for this fragment
+        return inflater.inflate(R.layout.fragment_camera, container, false);
+    }
+
+    CodeView codeView ;
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        imageView = view.findViewById(R.id.imageId);
+        mCamera = view.findViewById(R.id.camera);
+        mGallary = view.findViewById(R.id.Gallery);
+        codeView = view.findViewById(R.id.code_view);
+
+        //find textview
+     //   textView = view.findViewById(R.id.textId);
+       // textSuggestion = view.findViewById(R.id.textSuggestion);
+        _analyse = new Analyse(getContext());
+
+
+        checkPermission(REQUEST_TAKE_PHOTO, false);
+
+
+        mGallary.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                checkPermission(REQUEST_PHOTO_GALLERY, true);
+            }
+        });
+
+
+        mCamera.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                checkPermission(REQUEST_TAKE_PHOTO, true);
+            }
+        });
+
+       // mZoom= view.findViewById(R.id.zoom_button);
+       // mZoom.setOnClickListener(new View.OnClickListener() {
+        //    @Override
+         //   public void onClick(View view) {
+               // Intent intent = CodeViewActivity.newIntent(getActivity() , codeView.) ;
+               // startActivity(intent);
+            }
+      //  });
+  //  }
+
+    //Check whether the user has granted the WRITE_STORAGE permission//
+
+    public void checkPermission(int requestCode, boolean open) {
+        switch (requestCode) {
+
+            case REQUEST_TAKE_PHOTO:
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (requireContext().getApplicationContext().checkSelfPermission(Manifest.permission.CAMERA) ==
+                            PackageManager.PERMISSION_DENIED ||
+                            requireContext().getApplicationContext().checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                                    PackageManager.PERMISSION_DENIED) {
+                        //permission not enabled, request it
+                        ActivityCompat.requestPermissions(requireActivity(), new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, requestCode);
+                    } else if (open) {
+                        //permission already granted
+                        openCamera();
+                    }
+                } else {
+                    if (open) {
+                        //permission already granted
+                        openCamera();
+                    }
+                }
+
+                break;
+
+
+            case REQUEST_PHOTO_GALLERY:
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (requireContext().getApplicationContext().checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                            PackageManager.PERMISSION_GRANTED) {
+                        selectPicture();
+                    } else {
+                        ActivityCompat.requestPermissions(requireActivity(), new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, requestCode);
+                    }
+                }
+                break;
+
+
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (requestCode != requestPermissionID) {
+            Log.e("MainActivity", "Got unexpected permission result: " + requestCode);
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+            return;
+        }
+
+        if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            try {
+                if (ActivityCompat.checkSelfPermission(requireContext().getApplicationContext(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    return;
+                }
+
+                // openCamera();
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+
+    }
+
+
+    public void openCamera() {
+        photoFile = PicUtil.createTempFile(photoFile);
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        // Ensure that there's a camera activity to handle the intent
+        if (takePictureIntent.resolveActivity(requireContext().getApplicationContext().getPackageManager()) != null) {
+
+            try {
+
+            } catch (Exception ex) {
+                // Error occurred while creating the File
+                Log.e("Main", ex.toString());
+
+            }
+
+            if (photoFile != null) {
+
+                Uri photoURI = FileProvider.getUriForFile(requireContext().getApplicationContext(),
+                        "coding.academy.scd_ml_kit.fileprovider",
+                        photoFile);
+
+                //  Uri photoURI =  Uri.fromFile(photoFile);
+                Log.e("Main", photoURI.getPath());
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+                takePictureIntent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
+            }
+
+
+        }
+
+
+    }
+
+    public File photoFile;
+
+    private void selectPicture() {
+        photoFile = PicUtil.createTempFile(photoFile);
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*");
+        startActivityForResult(intent, REQUEST_PHOTO_GALLERY);
+    }
+
+
+    //https://www.androidauthority.com/ml-kit-extracting-text-from-images-google-machine-learning-sdk-911740/
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        try {
+
+            if (requestCode == REQUEST_TAKE_PHOTO && resultCode == RESULT_OK) {
+
+
+                Uri imageUri = FileProvider.getUriForFile(requireContext().getApplicationContext(),
+                        "coding.academy.scd_ml_kit.fileprovider",
+                        photoFile);
+
+                Log.e("imageUri =", imageUri.getPath());
+
+                Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+                mediaScanIntent.setData(imageUri);
+                requireContext().getApplicationContext().sendBroadcast(mediaScanIntent);
+
+
+                Bitmap myBitmap = PicUtil.resizePhoto(photoFile, requireContext().getApplicationContext(), imageUri, imageView);
+
+                if (myBitmap != null) {
+                    imageView.setImageBitmap(myBitmap);
+                    imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    FbVisionTextRecognizer(myBitmap);
+                }
+
+            } else if (requestCode == REQUEST_PHOTO_GALLERY && resultCode == RESULT_OK) {
+                Uri imageUri = (Uri) data.getData();
+                Log.e("ocr", "launchMediaScanIntent = " + imageUri.getPath());
+
+
+                Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+                mediaScanIntent.setData(imageUri);
+                requireContext().getApplicationContext().sendBroadcast(mediaScanIntent);
+
+                String path = PicUtil.getPath(requireContext().getApplicationContext(), imageUri);
+
+                Bitmap myBitmap;
+                if (path == null) {
+                    myBitmap = PicUtil.resizePhoto(photoFile, requireContext().getApplicationContext(), imageUri, imageView);
+                } else {
+                    myBitmap = PicUtil.resizePhoto(photoFile, path, imageView);
+                }
+                if (myBitmap != null) {
+                    // textView.setText(null);
+                    //imageView.setImageBitmap(myBitmap);
+                    imageView.setImageBitmap(myBitmap);
+                    imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    FbVisionTextRecognizer(myBitmap);
+                }
+
+
+
+            }
+
+
+        } catch (Exception e) {
+            Log.e("Main", e.toString());
+        }
+
+
+    }
+    private static final String ARG_CODE = "CODE";
+
+    FirebaseVision firebaseVision;
+    FirebaseVisionImage firebaseVisionImage;
+    FirebaseVisionTextRecognizer firebaseVisionTextRecognizer;
+
+    private void FbVisionTextRecognizer(Bitmap bitmap) {
+        //process the image
+        //1. create a FirebaseVisionImage object from a Bitmap object
+        firebaseVisionImage = FirebaseVisionImage.fromBitmap(bitmap);
+        //2. Get an instance of FirebaseVision
+        firebaseVision = FirebaseVision.getInstance();
+        //3. Create an instance of FirebaseVisionTextRecognizer
+        firebaseVisionTextRecognizer = firebaseVision.getOnDeviceTextRecognizer();
+        //4. Create a task to process the image
+        Task<FirebaseVisionText> task = firebaseVisionTextRecognizer.processImage(firebaseVisionImage);
+        //5. if task is success
+
+
+        task.addOnSuccessListener(new OnSuccessListener<FirebaseVisionText>() {
+            @Override
+            public void onSuccess(FirebaseVisionText firebaseVisionText) {
+                // String s = firebaseVisionText.getText();
+                processExtractedText(firebaseVisionText);
+                //  textView.setText(s);
+            }
+        });
+        //6. if task is failure
+        task.addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+
+                Toast.makeText(requireContext().getApplicationContext(), e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+
+
+    }
+
+
+    private void processExtractedText(FirebaseVisionText firebaseVisionText) {
+
+        String lineText ="";
+        if (firebaseVisionText.getTextBlocks().size() == 0) {
+
+            return;
+        }
+
+
+
+        for (FirebaseVisionText.TextBlock block : firebaseVisionText.getTextBlocks()) {
+            //  textView.append(block.getText() );
+            String blockText = block.getText();
+            Point[] blockCornerPoints = block.getCornerPoints();
+            Rect blockFrame = block.getBoundingBox();
+
+            for (FirebaseVisionText.Line line : block.getLines()) {
+                 lineText += line.getText() + "\n";
+            }
+
+        }
+
+
+        _analyse.analysCode(lineText).observe(this, new Observer<String>() {
+            @Override
+            public void onChanged(String s) {
+
+                codeView.setOptions(Options.Default.get(getContext())
+                        .withLanguage("java")
+                        .withCode(s)
+                        .withTheme(ColorTheme.MONOKAI));
+
+              //  mZoom.setVisibility(View.VISIBLE);
+
+
+
+               /* Intent intent = CodeViewActivity.newIntent(getActivity() , s) ;
+                Bundle bundle = new Bundle();
+                bundle.putString(ARG_CODE , s );
+                intent.putExtras(bundle) ;
+                startActivity(intent);
+
+                */
+            }
+
+
+        }
+
+        );
+
+
+
+
+    }
+
+}

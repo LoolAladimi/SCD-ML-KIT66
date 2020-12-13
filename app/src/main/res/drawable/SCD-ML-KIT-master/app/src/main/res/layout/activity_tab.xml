@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main_content"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical"
+    >
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:theme="@style/ThemeOverlay.AppCompat.ActionBar"
+        >
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/Main_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:titleTextColor="@color/white"
+            android:background="@color/SCD"
+          />
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tablayout_id"
+        android:layout_width="match_parent"
+        android:layout_height="?listPreferredItemHeight"
+        app:tabGravity="fill"
+
+        android:background="@color/SCD"
+        app:tabSelectedTextColor="@color/white"
+        app:tabIndicatorColor="@color/SCD2"
+        app:tabMode="fixed"
+
+        />
+
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/tab_view_pager"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        />
+
+
+
+</LinearLayout>
